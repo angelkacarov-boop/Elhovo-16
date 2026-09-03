@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101216" />
+  <title>3D модел — DJI Terra</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.142.0/Build/Cesium/Widgets/widgets.css" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="cesiumContainer" aria-label="3D модел"></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-title">3D модел</div>
+      <div class="brand-subtitle">DJI Terra Viewer</div>
+    </div>
+    <div id="loadState" class="load-state">Зареждане…</div>
+  </header>
+  <section class="toolbar" aria-label="Инструменти">
+    <button id="measureBtn" type="button" class="tool-btn" title="Измерване между две точки"><span class="tool-icon">↔</span><span>Измерване</span></button>
+    <button id="clearBtn" type="button" class="tool-btn" title="Изчисти всички измервания"><span class="tool-icon">×</span><span>Изчисти</span></button>
+    <button id="homeBtn" type="button" class="tool-btn" title="Върни началния изглед"><span class="tool-icon">⌂</span><span>Начален изглед</span></button>
+  </section>
+  <div id="measureHint" class="measure-hint" hidden>Избери първа точка върху модела</div>
+  <div class="help">
+    <span class="desktop-help">Ляв бутон: въртене · Колелце: мащаб · Среден бутон: панорама</span>
+    <span class="mobile-help">1 пръст: въртене · 2 пръста: мащаб и панорама</span>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.142.0/Build/Cesium/Cesium.js"></script>
+  <script src="./app.js?v=1"></script>
+</body>
+</html>
