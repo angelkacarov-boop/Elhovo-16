@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#101216" />
   <title>Elhovo-16 — 3D преглед и забележки</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.142.0/Build/Cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="./style.css?v=20" />
+  <link rel="stylesheet" href="./style.css?v=30" />
 </head>
 <body>
   <div id="cesiumContainer" aria-label="3D модел"></div>
@@ -23,13 +23,30 @@
   </header>
 
   <section class="toolbar glass" aria-label="Инструменти">
-    <button id="measureBtn" type="button" class="tool-btn" title="Измерване между две точки"><span class="tool-icon">↔</span><span>Измерване</span></button>
+    <button id="measureBtn" type="button" class="tool-btn" title="Измерване между две точки"><span class="tool-icon">↔</span><span>Дължина</span></button>
+    <button id="areaBtn" type="button" class="tool-btn" title="Измерване на площ с много точки"><span class="tool-icon">▱</span><span>Площ</span></button>
     <button id="noteBtn" type="button" class="tool-btn tool-btn-accent" title="Добави забележка върху модела"><span class="tool-icon">✎</span><span>Забележка</span></button>
     <button id="notesLayerBtn" type="button" class="tool-btn active" title="Покажи или скрий всички забележки"><span class="tool-icon">◉</span><span>Слой</span></button>
     <button id="panelBtn" type="button" class="tool-btn" title="Отвори списъка със забележки"><span class="tool-icon">☷</span><span>Списък</span></button>
     <button id="clearBtn" type="button" class="tool-btn" title="Изчисти измерванията"><span class="tool-icon">×</span><span>Мерки</span></button>
+    <button id="buildingBtn" type="button" class="tool-btn" title="Избери конкретната сграда за фасадни изгледи"><span class="tool-icon">▣</span><span>Сграда</span></button>
+    <button id="viewsBtn" type="button" class="tool-btn" title="Готови изгледи към избраната сграда"><span class="tool-icon">◫</span><span>Изгледи</span></button>
     <button id="homeBtn" type="button" class="tool-btn" title="Върни началния изглед"><span class="tool-icon">⌂</span><span>Начален</span></button>
   </section>
+
+
+  <div id="viewsPanel" class="views-panel glass" hidden>
+    <div class="views-title">Изгледи към сградата</div>
+    <div class="views-grid">
+      <button type="button" class="view-btn" data-view="top">Отгоре</button>
+      <button type="button" class="view-btn" data-view="front">Отпред</button>
+      <button type="button" class="view-btn" data-view="back">Отзад</button>
+      <button type="button" class="view-btn" data-view="left">Отляво</button>
+      <button type="button" class="view-btn" data-view="right">Отдясно</button>
+    </div>
+    <label class="crop-toggle"><input id="cropBuildingToggle" type="checkbox" checked /> Само избраната сграда</label>
+    <div class="views-help">За първа настройка натисни „Сграда“ и посочи 4 ъгъла: преден ляв → преден десен → заден десен → заден ляв.</div>
+  </div>
 
   <div id="interactionHint" class="measure-hint glass" hidden></div>
   <div id="toast" class="toast glass" hidden></div>
@@ -135,6 +152,6 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js"></script>
-  <script src="./app.js?v=20"></script>
+  <script src="./app.js?v=30"></script>
 </body>
 </html>
