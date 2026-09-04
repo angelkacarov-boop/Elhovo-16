@@ -14,10 +14,15 @@
   const loadState = $('loadState');
   const syncState = $('syncState');
   const measureBtn = $('measureBtn');
+  const areaBtn = $('areaBtn');
   const noteBtn = $('noteBtn');
   const notesLayerBtn = $('notesLayerBtn');
   const panelBtn = $('panelBtn');
   const clearBtn = $('clearBtn');
+  const buildingBtn = $('buildingBtn');
+  const viewsBtn = $('viewsBtn');
+  const viewsPanel = $('viewsPanel');
+  const cropBuildingToggle = $('cropBuildingToggle');
   const homeBtn = $('homeBtn');
   const interactionHint = $('interactionHint');
   const toast = $('toast');
@@ -90,8 +95,12 @@
   });
 
   let tileset = null;
-  let mode = 'none'; // none | measure | note
+  let mode = 'none'; // none | measure | area | note | building
   let pendingMeasurePoint = null;
+  let areaPoints = [];
+  let buildingPoints = [];
+  let buildingSettings = null;
+  let buildingClipping = null;
   let pendingNoteAnchor = null;
   let editingAnnotation = null;
   let currentUser = null;
@@ -208,17 +217,30 @@
     mode = next;
     pendingMeasurePoint = null;
     pendingNoteAnchor = null;
+    if (mode !== 'area') areaPoints = [];
+    if (mode !== 'building') buildingPoints = [];
 
     measureBtn.classList.toggle('active', mode === 'measure');
+    areaBtn.classList.toggle('active', mode === 'area');
     noteBtn.classList.toggle('active', mode === 'note');
+    buildingBtn.classList.toggle('active', mode === 'building');
     container.classList.toggle('mode-pick', mode !== 'none');
+
+    if (mode !== 'area') areaBtn.querySelector('span:last-child').textContent = 'Площ';
 
     if (mode === 'measure') {
       interactionHint.hidden = false;
       interactionHint.textContent = 'Избери първа точка за измерване';
+    } else if (mode === 'area') {
+      interactionHint.hidden = false;
+      interactionHint.textContent = 'Посочи минимум 3 точки по контура. После натисни „Завърши“.';
     } else if (mode === 'note') {
       interactionHint.hidden = false;
       interactionHint.textContent = 'Щракни върху мястото за новата забележка';
+    } else if (mode === 'building') {
+      interactionHint.hidden = false;
+      interactionHint.textContent = '1/4: посочи ПРЕДЕН ЛЯВ ъгъл на сградата';
+      setBuildingCrop(false);
     } else {
       interactionHint.hidden = true;
     }
@@ -270,6 +292,300 @@
     measurementEntities.splice(0).forEach((entity) => viewer.entities.remove(entity));
     pendingMeasurePoint = null;
     if (mode === 'measure') interactionHint.textContent = 'Избери първа точка за измерване';
+  }
+
+
+  function addAreaPoint(position) {
+    areaPoints.push(Cesium.Cartesian3.clone(position));
+    const point = viewer.entities.add({
+      position,
+      point: {
+        pixelSize: 9,
+        color: Cesium.Color.fromCssColorString('#73d8ff'),
+        outlineColor: Cesium.Color.fromCssColorString('#101216'),
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+    measurementEntities.push(point);
+
+    if (areaPoints.length > 1) {
+      const line = viewer.entities.add({
+        polyline: {
+          positions: [areaPoints[areaPoints.length - 2], areaPoints[areaPoints.length - 1]],
+          width: 3,
+          material: Cesium.Color.fromCssColorString('#73d8ff'),
+          depthFailMaterial: Cesium.Color.fromCssColorString('#73d8ff').withAlpha(0.45)
+        }
+      });
+      measurementEntities.push(line);
+    }
+
+    if (areaPoints.length >= 3) areaBtn.querySelector('span:last-child').textContent = 'Завърши';
+    interactionHint.textContent = `${areaPoints.length} точки · ${areaPoints.length >= 3 ? 'натисни „Завърши“ или добави още' : 'добави още точки'}`;
+  }
+
+  function triangleArea3D(a, b, c) {
+    const ab = Cesium.Cartesian3.subtract(b, a, new Cesium.Cartesian3());
+    const ac = Cesium.Cartesian3.subtract(c, a, new Cesium.Cartesian3());
+    const cross = Cesium.Cartesian3.cross(ab, ac, new Cesium.Cartesian3());
+    return 0.5 * Cesium.Cartesian3.magnitude(cross);
+  }
+
+  function formatArea(squareMeters) {
+    if (!Number.isFinite(squareMeters)) return '—';
+    if (squareMeters < 1) return `${(squareMeters * 10000).toFixed(0)} cm²`;
+    if (squareMeters < 10000) return `${squareMeters.toFixed(2)} m²`;
+    return `${(squareMeters / 10000).toFixed(4)} ha`;
+  }
+
+  function finishAreaMeasurement() {
+    if (areaPoints.length < 3) {
+      showToast('За площ са нужни минимум 3 точки.', 'error');
+      return;
+    }
+
+    let area = 0;
+    for (let i = 1; i < areaPoints.length - 1; i++) {
+      area += triangleArea3D(areaPoints[0], areaPoints[i], areaPoints[i + 1]);
+    }
+
+    const closingLine = viewer.entities.add({
+      polyline: {
+        positions: [areaPoints[areaPoints.length - 1], areaPoints[0]],
+        width: 3,
+        material: Cesium.Color.fromCssColorString('#73d8ff'),
+        depthFailMaterial: Cesium.Color.fromCssColorString('#73d8ff').withAlpha(0.45)
+      }
+    });
+
+    const polygon = viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy(areaPoints.map((p) => Cesium.Cartesian3.clone(p))),
+        perPositionHeight: true,
+        material: Cesium.Color.fromCssColorString('#73d8ff').withAlpha(0.18),
+        outline: true,
+        outlineColor: Cesium.Color.fromCssColorString('#73d8ff')
+      }
+    });
+
+    const centroid = areaPoints.reduce(
+      (acc, p) => Cesium.Cartesian3.add(acc, p, acc),
+      new Cesium.Cartesian3()
+    );
+    Cesium.Cartesian3.divideByScalar(centroid, areaPoints.length, centroid);
+
+    const label = viewer.entities.add({
+      position: centroid,
+      label: {
+        text: formatArea(area),
+        font: '700 16px Inter, Arial, sans-serif',
+        fillColor: Cesium.Color.WHITE,
+        showBackground: true,
+        backgroundColor: Cesium.Color.fromCssColorString('#111318').withAlpha(0.92),
+        backgroundPadding: new Cesium.Cartesian2(9, 6),
+        pixelOffset: new Cesium.Cartesian2(0, -16),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+
+    measurementEntities.push(closingLine, polygon, label);
+    showToast(`Площ: ${formatArea(area)}`, 'ok');
+    areaPoints = [];
+    areaBtn.querySelector('span:last-child').textContent = 'Площ';
+    interactionHint.textContent = 'Избери първа точка за нова площ';
+  }
+
+  function addBuildingSelectionPoint(position) {
+    buildingPoints.push(Cesium.Cartesian3.clone(position));
+    const point = viewer.entities.add({
+      position,
+      point: {
+        pixelSize: 11,
+        color: Cesium.Color.fromCssColorString('#ff9f55'),
+        outlineColor: Cesium.Color.fromCssColorString('#101216'),
+        outlineWidth: 2,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY
+      }
+    });
+    measurementEntities.push(point);
+
+    if (buildingPoints.length > 1) {
+      const line = viewer.entities.add({
+        polyline: {
+          positions: [buildingPoints[buildingPoints.length - 2], buildingPoints[buildingPoints.length - 1]],
+          width: 3,
+          material: Cesium.Color.fromCssColorString('#ff9f55')
+        }
+      });
+      measurementEntities.push(line);
+    }
+
+    const prompts = [
+      '2/4: посочи ПРЕДЕН ДЕСЕН ъгъл',
+      '3/4: посочи ЗАДЕН ДЕСЕН ъгъл',
+      '4/4: посочи ЗАДЕН ЛЯВ ъгъл'
+    ];
+    if (buildingPoints.length < 4) {
+      interactionHint.textContent = prompts[buildingPoints.length - 1];
+    } else {
+      finishBuildingSelection();
+    }
+  }
+
+  function averageCartesian(points) {
+    const result = new Cesium.Cartesian3();
+    points.forEach((p) => Cesium.Cartesian3.add(result, p, result));
+    return Cesium.Cartesian3.divideByScalar(result, points.length, result);
+  }
+
+  async function finishBuildingSelection() {
+    if (buildingPoints.length !== 4 || !currentUser) return;
+
+    const center = averageCartesian(buildingPoints);
+    const frontMid = Cesium.Cartesian3.midpoint(buildingPoints[0], buildingPoints[1], new Cesium.Cartesian3());
+    const backMid = Cesium.Cartesian3.midpoint(buildingPoints[3], buildingPoints[2], new Cesium.Cartesian3());
+
+    const right = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(buildingPoints[1], buildingPoints[0], new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+    const back = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(backMid, frontMid, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+    const front = Cesium.Cartesian3.negate(back, new Cesium.Cartesian3());
+    const up = Cesium.Cartesian3.normalize(center, new Cesium.Cartesian3());
+
+    const frontWidth = Cesium.Cartesian3.distance(buildingPoints[0], buildingPoints[1]);
+    const backWidth = Cesium.Cartesian3.distance(buildingPoints[3], buildingPoints[2]);
+    const leftDepth = Cesium.Cartesian3.distance(buildingPoints[0], buildingPoints[3]);
+    const rightDepth = Cesium.Cartesian3.distance(buildingPoints[1], buildingPoints[2]);
+    const halfWidth = Math.max(frontWidth, backWidth) / 2 + 1.5;
+    const halfDepth = Math.max(leftDepth, rightDepth) / 2 + 1.5;
+    const range = Math.max(halfWidth * 2, halfDepth * 2, 12);
+
+    const payload = {
+      model_id: MODEL_ID,
+      center_x: center.x, center_y: center.y, center_z: center.z,
+      front_x: front.x, front_y: front.y, front_z: front.z,
+      up_x: up.x, up_y: up.y, up_z: up.z,
+      right_x: right.x, right_y: right.y, right_z: right.z,
+      half_width_m: halfWidth,
+      half_depth_m: halfDepth,
+      range_m: range,
+      height_offset_m: 0,
+      updated_by: currentUser.id
+    };
+
+    let query = db.from('model_view_settings').upsert(payload, { onConflict: 'model_id' }).select('*').single();
+    const { data, error } = await query;
+    if (error) {
+      console.error(error);
+      showToast('Не успях да запиша настройката на сградата. Ако е настройвана от друг браузър, изтрий реда model_view_settings и опитай пак.', 'error');
+      setMode('none');
+      return;
+    }
+
+    buildingSettings = data;
+    cropBuildingToggle.checked = true;
+    setBuildingCrop(true);
+    showToast('Сградата е настроена. Готовите изгледи са активни.', 'ok');
+    setMode('none');
+    viewsPanel.hidden = false;
+  }
+
+  async function loadBuildingSettings() {
+    const { data, error } = await db
+      .from('model_view_settings')
+      .select('*')
+      .eq('model_id', MODEL_ID)
+      .maybeSingle();
+    if (error) {
+      console.warn('Building settings load failed', error);
+      return;
+    }
+    buildingSettings = data || null;
+    if (buildingSettings && cropBuildingToggle.checked) setBuildingCrop(true);
+  }
+
+  function getBuildingVectors() {
+    if (!buildingSettings) return null;
+    return {
+      center: new Cesium.Cartesian3(buildingSettings.center_x, buildingSettings.center_y, buildingSettings.center_z),
+      front: Cesium.Cartesian3.normalize(new Cesium.Cartesian3(buildingSettings.front_x, buildingSettings.front_y, buildingSettings.front_z), new Cesium.Cartesian3()),
+      right: Cesium.Cartesian3.normalize(new Cesium.Cartesian3(buildingSettings.right_x, buildingSettings.right_y, buildingSettings.right_z), new Cesium.Cartesian3()),
+      up: Cesium.Cartesian3.normalize(new Cesium.Cartesian3(buildingSettings.up_x, buildingSettings.up_y, buildingSettings.up_z), new Cesium.Cartesian3())
+    };
+  }
+
+  function setBuildingCrop(enabled) {
+    if (!tileset) return;
+    if (buildingClipping) {
+      try { buildingClipping.destroy(); } catch (_) {}
+      buildingClipping = null;
+      tileset.clippingPlanes = undefined;
+    }
+    if (!enabled || !buildingSettings) return;
+
+    const v = getBuildingVectors();
+    const back = Cesium.Cartesian3.negate(v.front, new Cesium.Cartesian3());
+    const rotation = Cesium.Matrix3.fromColumns(v.right, back, v.up, new Cesium.Matrix3());
+    const modelMatrix = Cesium.Matrix4.fromRotationTranslation(rotation, v.center, new Cesium.Matrix4());
+    const hw = Math.max(Number(buildingSettings.half_width_m) || 10, 1);
+    const hd = Math.max(Number(buildingSettings.half_depth_m) || 10, 1);
+
+    buildingClipping = new Cesium.ClippingPlaneCollection({
+      modelMatrix,
+      planes: [
+        new Cesium.ClippingPlane(new Cesium.Cartesian3(1, 0, 0), hw),
+        new Cesium.ClippingPlane(new Cesium.Cartesian3(-1, 0, 0), hw),
+        new Cesium.ClippingPlane(new Cesium.Cartesian3(0, 1, 0), hd),
+        new Cesium.ClippingPlane(new Cesium.Cartesian3(0, -1, 0), hd)
+      ],
+      unionClippingRegions: false,
+      edgeWidth: 0.5,
+      edgeColor: Cesium.Color.fromCssColorString('#ff9f55')
+    });
+    tileset.clippingPlanes = buildingClipping;
+  }
+
+  async function flyToBuildingView(viewName) {
+    if (!buildingSettings) {
+      showToast('Първо натисни „Сграда“ и посочи 4-те ѝ ъгъла.', 'error');
+      return;
+    }
+    const v = getBuildingVectors();
+    const distance = Math.max(Number(buildingSettings.range_m) * 1.7, 18);
+    let cameraDir;
+    let cameraUp = v.up;
+
+    if (viewName === 'front') cameraDir = v.front;
+    if (viewName === 'back') cameraDir = Cesium.Cartesian3.negate(v.front, new Cesium.Cartesian3());
+    if (viewName === 'right') cameraDir = v.right;
+    if (viewName === 'left') cameraDir = Cesium.Cartesian3.negate(v.right, new Cesium.Cartesian3());
+    if (viewName === 'top') {
+      cameraDir = v.up;
+      cameraUp = v.front;
+    }
+    if (!cameraDir) return;
+
+    const destination = Cesium.Cartesian3.add(
+      v.center,
+      Cesium.Cartesian3.multiplyByScalar(cameraDir, viewName === 'top' ? distance * 1.05 : distance, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+    const direction = Cesium.Cartesian3.normalize(
+      Cesium.Cartesian3.subtract(v.center, destination, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
+    );
+
+    setBuildingCrop(cropBuildingToggle.checked);
+    await viewer.camera.flyTo({
+      destination,
+      orientation: { direction, up: cameraUp },
+      duration: 0.8
+    });
   }
 
   function computeLabelPosition(anchor) {
@@ -900,18 +1216,39 @@
       return;
     }
 
+    if (mode === 'area') {
+      addAreaPoint(position);
+      return;
+    }
+
+    if (mode === 'building') {
+      addBuildingSelectionPoint(position);
+      return;
+    }
+
     if (mode === 'note') {
       openNewNoteModal(position);
     }
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   measureBtn.addEventListener('click', () => setMode(mode === 'measure' ? 'none' : 'measure'));
+  areaBtn.addEventListener('click', () => {
+    if (mode === 'area' && areaPoints.length >= 3) finishAreaMeasurement();
+    else setMode(mode === 'area' ? 'none' : 'area');
+  });
   noteBtn.addEventListener('click', () => setMode(mode === 'note' ? 'none' : 'note'));
   notesLayerBtn.addEventListener('click', toggleNotesLayer);
   panelBtn.addEventListener('click', () => notesPanel.hidden ? openPanel() : closePanel());
   closePanelBtn.addEventListener('click', closePanel);
   clearBtn.addEventListener('click', clearMeasurements);
   refreshBtn.addEventListener('click', loadAnnotations);
+  buildingBtn.addEventListener('click', () => setMode(mode === 'building' ? 'none' : 'building'));
+  viewsBtn.addEventListener('click', () => { viewsPanel.hidden = !viewsPanel.hidden; });
+  viewsPanel.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-view]');
+    if (btn) flyToBuildingView(btn.dataset.view);
+  });
+  cropBuildingToggle.addEventListener('change', () => setBuildingCrop(cropBuildingToggle.checked));
 
   homeBtn.addEventListener('click', async () => {
     if (tileset) await viewer.zoomTo(tileset);
@@ -982,6 +1319,10 @@
     if (event.key.toLowerCase() === 'm' && !event.ctrlKey && !event.metaKey && !event.altKey) {
       setMode(mode === 'measure' ? 'none' : 'measure');
     }
+    if (event.key.toLowerCase() === 'a' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (mode === 'area' && areaPoints.length >= 3) finishAreaMeasurement();
+      else setMode(mode === 'area' ? 'none' : 'area');
+    }
   });
 
   async function init() {
@@ -993,6 +1334,7 @@
       setSyncState('Забележки: свързване…');
       await ensureAnonymousSession();
       await loadAnnotations();
+      await loadBuildingSettings();
       setupRealtime();
     } catch (error) {
       console.error(error);
