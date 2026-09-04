@@ -4,30 +4,137 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#101216" />
-  <title>3D модел — DJI Terra</title>
+  <title>Elhovo-16 — 3D преглед и забележки</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.142.0/Build/Cesium/Widgets/widgets.css" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=20" />
 </head>
 <body>
   <div id="cesiumContainer" aria-label="3D модел"></div>
+
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-title">3D модел</div>
-      <div class="brand-subtitle">DJI Terra Viewer</div>
+    <div class="brand glass">
+      <div class="brand-title">Elhovo-16</div>
+      <div class="brand-subtitle">3D модел · измерване · общи забележки</div>
     </div>
-    <div id="loadState" class="load-state">Зареждане…</div>
+    <div class="topbar-actions">
+      <div id="syncState" class="load-state glass">Забележки: свързване…</div>
+      <div id="loadState" class="load-state glass">Модел: зареждане…</div>
+    </div>
   </header>
-  <section class="toolbar" aria-label="Инструменти">
+
+  <section class="toolbar glass" aria-label="Инструменти">
     <button id="measureBtn" type="button" class="tool-btn" title="Измерване между две точки"><span class="tool-icon">↔</span><span>Измерване</span></button>
-    <button id="clearBtn" type="button" class="tool-btn" title="Изчисти всички измервания"><span class="tool-icon">×</span><span>Изчисти</span></button>
-    <button id="homeBtn" type="button" class="tool-btn" title="Върни началния изглед"><span class="tool-icon">⌂</span><span>Начален изглед</span></button>
+    <button id="noteBtn" type="button" class="tool-btn tool-btn-accent" title="Добави забележка върху модела"><span class="tool-icon">✎</span><span>Забележка</span></button>
+    <button id="notesLayerBtn" type="button" class="tool-btn active" title="Покажи или скрий всички забележки"><span class="tool-icon">◉</span><span>Слой</span></button>
+    <button id="panelBtn" type="button" class="tool-btn" title="Отвори списъка със забележки"><span class="tool-icon">☷</span><span>Списък</span></button>
+    <button id="clearBtn" type="button" class="tool-btn" title="Изчисти измерванията"><span class="tool-icon">×</span><span>Мерки</span></button>
+    <button id="homeBtn" type="button" class="tool-btn" title="Върни началния изглед"><span class="tool-icon">⌂</span><span>Начален</span></button>
   </section>
-  <div id="measureHint" class="measure-hint" hidden>Избери първа точка върху модела</div>
-  <div class="help">
+
+  <div id="interactionHint" class="measure-hint glass" hidden></div>
+  <div id="toast" class="toast glass" hidden></div>
+
+  <aside id="notesPanel" class="notes-panel glass" hidden>
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Забележки</div>
+        <div id="noteCount" class="panel-subtitle">0 забележки</div>
+      </div>
+      <button id="closePanelBtn" class="icon-btn" type="button" aria-label="Затвори">×</button>
+    </div>
+
+    <div class="panel-search">
+      <input id="searchInput" type="search" placeholder="Търси по текст или автор…" />
+    </div>
+
+    <div class="panel-filters">
+      <label>
+        <span>Статус</span>
+        <select id="statusFilter">
+          <option value="all">Всички</option>
+          <option value="open">Отворена</option>
+          <option value="review">За проверка</option>
+          <option value="done">Изпълнена</option>
+        </select>
+      </label>
+      <label>
+        <span>Автор</span>
+        <select id="authorFilter">
+          <option value="all">Всички</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="panel-export">
+      <button id="exportExcelBtn" class="secondary-btn" type="button">Excel</button>
+      <button id="exportPdfBtn" class="secondary-btn" type="button">PDF</button>
+      <button id="refreshBtn" class="secondary-btn" type="button">Обнови</button>
+    </div>
+
+    <div id="notesList" class="notes-list"></div>
+  </aside>
+
+  <div id="noteModal" class="modal-backdrop" hidden>
+    <form id="noteForm" class="note-modal glass">
+      <div class="modal-head">
+        <div>
+          <div id="modalTitle" class="modal-title">Нова забележка</div>
+          <div id="modalIssueNo" class="modal-subtitle"></div>
+        </div>
+        <button id="cancelNoteX" class="icon-btn" type="button" aria-label="Затвори">×</button>
+      </div>
+
+      <label class="form-field">
+        <span>От кого е забележката *</span>
+        <input id="authorInput" maxlength="100" required placeholder="Напр. арх. Иван Иванов" autocomplete="name" />
+      </label>
+
+      <label class="form-field">
+        <span>Статус</span>
+        <select id="statusInput">
+          <option value="open">Отворена</option>
+          <option value="review">За проверка</option>
+          <option value="done">Изпълнена</option>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Забележка *</span>
+        <textarea id="noteInput" rows="5" maxlength="1200" required placeholder="Опиши какво трябва да се провери или коригира…"></textarea>
+      </label>
+
+      <label class="form-field">
+        <span>Снимки към забележката (по желание)</span>
+        <input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+      </label>
+      <div class="form-help">До 10 MB на снимка. Можеш да добавиш няколко.</div>
+
+      <div id="existingImages" class="existing-images"></div>
+
+      <div id="formError" class="form-error" hidden></div>
+
+      <div class="modal-actions">
+        <button id="cancelNoteBtn" class="secondary-btn" type="button">Отказ</button>
+        <button id="saveNoteBtn" class="primary-btn" type="submit">Запази</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="imageViewer" class="image-viewer" hidden>
+    <button id="closeImageViewer" class="icon-btn image-close" type="button">×</button>
+    <img id="imageViewerImg" alt="Снимка към забележката" />
+  </div>
+
+  <div class="help glass">
     <span class="desktop-help">Ляв бутон: въртене · Колелце: мащаб · Среден бутон: панорама</span>
     <span class="mobile-help">1 пръст: въртене · 2 пръста: мащаб и панорама</span>
   </div>
+
   <script src="https://cdn.jsdelivr.net/npm/cesium@1.142.0/Build/Cesium/Cesium.js"></script>
-  <script src="./app.js?v=1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/pdfmake.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfmake@0.2.10/build/vfs_fonts.js"></script>
+  <script src="./app.js?v=20"></script>
 </body>
 </html>
